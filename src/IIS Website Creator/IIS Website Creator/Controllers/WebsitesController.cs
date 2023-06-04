@@ -31,12 +31,22 @@ namespace IIS_Website_Creator.Controllers
             // Creates a new instance of the ServerManager class and assigns it to the variable "serverManager"
             using (ServerManager serverManager = new())
             {
+                // Create a new application pool with the same name as the site
+                ApplicationPool newAppPool = serverManager.ApplicationPools.Add(siteName);
+                newAppPool.ManagedRuntimeVersion = "";
+
+                // Save the changes made to the server manager
+                serverManager.CommitChanges();
+
                 // Calls the "GetNextAvailablePort" method and assigns the result to the variable "nextAvailablePort"
                 int nextAvailablePort = GetNextAvailablePort();
                 // Creates a directory with the specified path
                 Directory.CreateDirectory($"C:\\inetpub\\sites\\{siteName}");
                 // Adds a new site to the server with the specified parameters and assigns it to the variable "newSite"
                 Site newSite = serverManager.Sites.Add(siteName, $"C:\\inetpub\\sites\\{siteName}", nextAvailablePort);
+
+                newSite.ApplicationDefaults.ApplicationPoolName = siteName;
+
                 // Saves the changes made to the server manager
                 serverManager.CommitChanges();
                 // Gets the web configuration for the new site and assigns it to the variable "config"
@@ -94,8 +104,6 @@ namespace IIS_Website_Creator.Controllers
                 // Saves the changes made to the XML document
                 doc.Save(configFilePath);
 
-                // Specifies the name of the application pool
-                string poolName = "git";
                 // Specifies the project root path
                 string projectRoot = $@"C:\inetpub\sites\{siteName}";
 
@@ -104,31 +112,26 @@ namespace IIS_Website_Creator.Controllers
 
                 // Gets the specific "add" element within the "applicationPools" element based on the pool name
                 XElement appPoolElement = appPoolsElement.Elements("add")
-                    .FirstOrDefault(e => e.Attribute("name")?.Value == poolName);
+                    .FirstOrDefault(e => e.Attribute("name")?.Value == siteName);
 
                 // Checks if the app pool element exists
                 if (appPoolElement != null)
                 {
-                    // Gets the "environmentVariables" element within the app pool element
-                    XElement environmentVariablesElement = appPoolElement.Element("environmentVariables");
-
-                    // Checks if the environment variables element exists
-                    if (environmentVariablesElement != null)
-                    {
-                        // Creates a new environment variable element and adds it to the environment variables element
-                        XElement newEnvironmentVariableElement = new("add",
+                    // Creates a new environment variable element and adds it to the environment variables element
+                    XElement newEnvironmentVariables = new XElement("environmentVariables",
+                        new XElement("add",
                             new XAttribute("name", "GIT_PROJECT_ROOT"),
                             new XAttribute("value", projectRoot)
-                        );
+                        ),
+                        new XElement("add",
+                            new XAttribute("name", "GIT_HTTP_EXPORT_ALL"),
+                            new XAttribute("value", 1)
+                        )
+                    );
 
-                        environmentVariablesElement.Add(newEnvironmentVariableElement);
-                        // Saves the changes made to the XML document
-                        doc.Save(configFilePath);
-                    }
-                    else
-                    {
-                        // Handle case when the environment variables element is not found
-                    }
+                    appPoolElement.Add(newEnvironmentVariables);
+                    // Saves the changes made to the XML document
+                    doc.Save(configFilePath);
                 }
                 else
                 {
